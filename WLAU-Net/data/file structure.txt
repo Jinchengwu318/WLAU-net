@@ -1,0 +1,7 @@
+data/
+  ├── portal/  # Portal phase CT
+  │   ├── images/
+  │   └── masks/
+  └── plain/   # Non-contrast CT
+      ├── images/
+      └── masks/

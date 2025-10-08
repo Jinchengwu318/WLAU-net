@@ -1,0 +1,57 @@
+# 模型配置
+model:
+  hidden_dim: 512
+  encoder_channels: [64, 128, 256, 512]
+  num_transformer_layers: 12
+  num_heads: 8
+  wavelet_lambda1: 1.2
+  wavelet_lambda2: 1.1
+  output_channels: 1
+
+# 训练配置
+training:
+  batch_size: 4
+  num_epochs: 100
+  learning_rate: 1e-4
+  weight_decay: 1e-5
+  patience: 20
+  
+  # 损失函数权重
+  dice_weight: 0.7
+  bce_weight: 0.3
+  attention_weight: 0.3
+  
+  # 优化器
+  optimizer: "adam"
+  scheduler: "cosine"
+
+# 数据配置
+data:
+  image_size: 512
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  num_workers: 4
+  
+  # 数据增强
+  augmentation:
+    rotation_range: 15
+    width_shift_range: 0.1
+    height_shift_range: 0.1
+    horizontal_flip: True
+    vertical_flip: True
+
+# 路径配置
+paths:
+  data_dir: "./data"
+  portal_data: "./data/portal"
+  plain_data: "./data/plain"
+  checkpoints: "./checkpoints"
+  logs: "./logs"
+  results: "./results"
+
+# 实验配置
+experiment:
+  project_name: "liver_tumor_segmentation"
+  experiment_name: "transunet_improved"
+  use_wandb: false
