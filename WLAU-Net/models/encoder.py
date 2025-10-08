@@ -3,20 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
 class CTEncoder(nn.Module):
     """
-    专门的CT编码器：4次下采样提取多尺度特征
-    输入: 2通道 [原始图像, 增强图像]
-    输出: 4个不同尺度的特征图
+    Specialized CT encoder: 4 downsampling steps to extract multi-scale features
+    Input: 2 channels [original image, enhanced image]
+    Output: 4 feature maps at different scales
     """
-    
+
     def __init__(self, in_channels=2, base_channels=64):
         super(CTEncoder, self).__init__()
-        
+
         self.in_channels = in_channels
         self.base_channels = base_channels
-        
-        # 第一次下采样: 512x512 -> 256x256
+
+        # First downsampling: 512x512 -> 256x256
         self.down1 = nn.Sequential(
             nn.Conv2d(in_channels, base_channels, 3, padding=1),
             nn.BatchNorm2d(base_channels),
@@ -24,96 +25,97 @@ class CTEncoder(nn.Module):
             nn.Conv2d(base_channels, base_channels, 3, padding=1),
             nn.BatchNorm2d(base_channels),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2)  # 下采样2倍
+            nn.MaxPool2d(2)  # 2x downsampling
         )
-        
-        # 第二次下采样: 256x256 -> 128x128
+
+        # Second downsampling: 256x256 -> 128x128
         self.down2 = nn.Sequential(
-            nn.Conv2d(base_channels, base_channels*2, 3, padding=1),
-            nn.BatchNorm2d(base_channels*2),
+            nn.Conv2d(base_channels, base_channels * 2, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(base_channels*2, base_channels*2, 3, padding=1),
-            nn.BatchNorm2d(base_channels*2),
+            nn.Conv2d(base_channels * 2, base_channels * 2, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 2),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2)  # 下采样2倍
+            nn.MaxPool2d(2)  # 2x downsampling
         )
-        
-        # 第三次下采样: 128x128 -> 64x64
+
+        # Third downsampling: 128x128 -> 64x64
         self.down3 = nn.Sequential(
-            nn.Conv2d(base_channels*2, base_channels*4, 3, padding=1),
-            nn.BatchNorm2d(base_channels*4),
+            nn.Conv2d(base_channels * 2, base_channels * 4, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 4),
             nn.ReLU(inplace=True),
-            nn.Conv2d(base_channels*4, base_channels*4, 3, padding=1),
-            nn.BatchNorm2d(base_channels*4),
+            nn.Conv2d(base_channels * 4, base_channels * 4, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 4),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2)  # 下采样2倍
+            nn.MaxPool2d(2)  # 2x downsampling
         )
-        
-        # 第四次下采样: 64x64 -> 32x32
+
+        # Fourth downsampling: 64x64 -> 32x32
         self.down4 = nn.Sequential(
-            nn.Conv2d(base_channels*4, base_channels*8, 3, padding=1),
-            nn.BatchNorm2d(base_channels*8),
+            nn.Conv2d(base_channels * 4, base_channels * 8, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 8),
             nn.ReLU(inplace=True),
-            nn.Conv2d(base_channels*8, base_channels*8, 3, padding=1),
-            nn.BatchNorm2d(base_channels*8),
+            nn.Conv2d(base_channels * 8, base_channels * 8, 3, padding=1),
+            nn.BatchNorm2d(base_channels * 8),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2)  # 下采样2倍
+            nn.MaxPool2d(2)  # 2x downsampling
         )
-        
+
     def forward(self, x):
         """
-        前向传播，返回4个不同尺度的特征图
-        
+        Forward propagation, returns 4 feature maps at different scales
+
         Args:
-            x: 输入图像 [batch_size, 2, 512, 512]
-            
+            x: Input image [batch_size, 2, 512, 512]
+
         Returns:
-            features: 包含4个特征图的列表
+            features: List containing 4 feature maps
                 - f1: [batch_size, base_channels, 256, 256]
-                - f2: [batch_size, base_channels*2, 128, 128] 
+                - f2: [batch_size, base_channels*2, 128, 128]
                 - f3: [batch_size, base_channels*4, 64, 64]
                 - f4: [batch_size, base_channels*8, 32, 32]
         """
-        # 第一次下采样
+        # First downsampling
         f1 = self.down1(x)  # [B, 64, 256, 256]
-        
-        # 第二次下采样
+
+        # Second downsampling
         f2 = self.down2(f1)  # [B, 128, 128, 128]
-        
-        # 第三次下采样
+
+        # Third downsampling
         f3 = self.down3(f2)  # [B, 256, 64, 64]
-        
-        # 第四次下采样
+
+        # Fourth downsampling
         f4 = self.down4(f3)  # [B, 512, 32, 32]
-        
-        # 返回所有尺度的特征图
+
+        # Return feature maps at all scales
         return [f1, f2, f3, f4]
+
 
 class EncoderTransfer:
     """
-    编码器迁移学习：将门脉期编码器参数迁移到平扫期并冻结
+    Encoder transfer learning: Transfer portal phase encoder parameters to plain phase and freeze
     """
-    
+
     def __init__(self, base_channels=64):
         self.base_channels = base_channels
-        
-        # 创建门脉期编码器（源编码器）
+
+        # Create portal phase encoder (source encoder)
         self.portal_encoder = CTEncoder(in_channels=2, base_channels=base_channels)
-        
-        # 创建平扫期编码器（目标编码器）
+
+        # Create plain phase encoder (target encoder)
         self.plain_encoder = CTEncoder(in_channels=2, base_channels=base_channels)
-        
+
     def load_portal_encoder_weights(self, checkpoint_path: str):
         """
-        加载在门脉期上预训练的编码器权重
+        Load pre-trained encoder weights from portal phase
         """
         checkpoint = torch.load(checkpoint_path)
-        
-        # 如果checkpoint包含整个模型，提取编码器部分
+
+        # If checkpoint contains entire model, extract encoder part
         if 'encoder_state_dict' in checkpoint:
             self.portal_encoder.load_state_dict(checkpoint['encoder_state_dict'])
         elif 'model_state_dict' in checkpoint:
-            # 假设checkpoint保存的是整个模型，我们需要提取编码器部分
+            # Assume checkpoint saves entire model, we need to extract encoder part
             portal_state_dict = {}
             for key, value in checkpoint['model_state_dict'].items():
                 if key.startswith('encoder.'):
@@ -121,131 +123,135 @@ class EncoderTransfer:
                     portal_state_dict[new_key] = value
             self.portal_encoder.load_state_dict(portal_state_dict)
         else:
-            # 直接加载编码器权重
+            # Directly load encoder weights
             self.portal_encoder.load_state_dict(checkpoint)
-            
-        print("成功加载门脉期编码器权重")
-        
+
+        print("Successfully loaded portal phase encoder weights")
+
     def transfer_and_freeze(self):
         """
-        将门脉期编码器参数复制到平扫期编码器并冻结
+        Copy portal phase encoder parameters to plain phase encoder and freeze
         """
-        # 复制权重
+        # Copy weights
         portal_state_dict = self.portal_encoder.state_dict()
         self.plain_encoder.load_state_dict(portal_state_dict)
-        
-        # 冻结平扫期编码器的所有参数
+
+        # Freeze all parameters of plain phase encoder
         for param in self.plain_encoder.parameters():
             param.requires_grad = False
-            
-        print("成功完成编码器参数迁移和冻结")
-        print(f"平扫期编码器参数冻结状态: {all(not p.requires_grad for p in self.plain_encoder.parameters())}")
-        
+
+        print("Successfully completed encoder parameter transfer and freezing")
+        print(
+            f"Plain phase encoder parameter frozen status: {all(not p.requires_grad for p in self.plain_encoder.parameters())}")
+
     def get_plain_encoder(self) -> CTEncoder:
         """
-        获取冻结后的平扫期编码器
+        Get frozen plain phase encoder
         """
         return self.plain_encoder
-    
+
     def get_portal_encoder(self) -> CTEncoder:
         """
-        获取门脉期编码器（用于验证等）
+        Get portal phase encoder (for validation, etc.)
         """
         return self.portal_encoder
 
+
 class MultiScaleFeatureProcessor:
     """
-    多尺度特征处理器：演示如何使用提取的特征
+    Multi-scale feature processor: Demonstrates how to use extracted features
     """
-    
+
     def __init__(self, encoder: CTEncoder):
         self.encoder = encoder
-        
+
     def extract_features(self, mixed_input: torch.Tensor):
         """
-        提取多尺度特征
-        
+        Extract multi-scale features
+
         Args:
-            mixed_input: 混合输入 [batch_size, 2, 512, 512]
-            
+            mixed_input: Mixed input [batch_size, 2, 512, 512]
+
         Returns:
-            features: 4个尺度的特征图列表
+            features: List of 4 feature maps at different scales
         """
-        with torch.no_grad():  # 因为编码器被冻结
+        with torch.no_grad():  # Because encoder is frozen
             features = self.encoder(mixed_input)
         return features
-    
+
     def analyze_features(self, features: list):
         """
-        分析提取的特征（这里只是一个示例，你可以根据实际需求修改）
+        Analyze extracted features (this is just an example, you can modify according to actual needs)
         """
-        print("多尺度特征分析:")
+        print("Multi-scale feature analysis:")
         for i, feat in enumerate(features):
-            print(f"特征图 {i+1}: 尺寸 {feat.shape}")
-            
-        # 这里可以添加你的特定特征处理逻辑
-        # 例如：特征融合、注意力机制、特征选择等
-        
+            print(f"Feature map {i + 1}: Size {feat.shape}")
+
+        # You can add your specific feature processing logic here
+        # For example: feature fusion, attention mechanisms, feature selection, etc.
+
         return features
 
-# 数据准备函数
+
+# Data preparation function
 def prepare_mixed_input(original_images: np.ndarray, enhanced_images: np.ndarray) -> torch.Tensor:
     """
-    准备混合输入：将原始图像和增强图像堆叠为2通道
-    
+    Prepare mixed input: Stack original and enhanced images as 2 channels
+
     Args:
-        original_images: 原始图像 [batch_size, 512, 512]
-        enhanced_images: 增强图像 [batch_size, 512, 512]
-        
+        original_images: Original images [batch_size, 512, 512]
+        enhanced_images: Enhanced images [batch_size, 512, 512]
+
     Returns:
-        mixed_input: 混合输入 [batch_size, 2, 512, 512]
+        mixed_input: Mixed input [batch_size, 2, 512, 512]
     """
-    # 转换为torch tensor
+    # Convert to torch tensor
     original_tensor = torch.FloatTensor(original_images).unsqueeze(1)  # [B, 1, 512, 512]
     enhanced_tensor = torch.FloatTensor(enhanced_images).unsqueeze(1)  # [B, 1, 512, 512]
-    
-    # 堆叠为2通道
+
+    # Stack as 2 channels
     mixed_input = torch.cat([original_tensor, enhanced_tensor], dim=1)  # [B, 2, 512, 512]
-    
+
     return mixed_input
 
-# 使用示例
+
+# Usage example
 if __name__ == "__main__":
-    # 初始化编码器迁移
+    # Initialize encoder transfer
     transfer = EncoderTransfer(base_channels=64)
-    
-    # 加载预训练的门脉期编码器权重
+
+    # Load pre-trained portal phase encoder weights
     PORTAL_CHECKPOINT = "path/to/portal_encoder_weights.pth"
     transfer.load_portal_encoder_weights(PORTAL_CHECKPOINT)
-    
-    # 执行参数迁移和冻结
+
+    # Execute parameter transfer and freezing
     transfer.transfer_and_freeze()
-    
-    # 获取冻结后的平扫期编码器
+
+    # Get frozen plain phase encoder
     plain_encoder = transfer.get_plain_encoder()
-    
-    # 初始化特征处理器
+
+    # Initialize feature processor
     feature_processor = MultiScaleFeatureProcessor(plain_encoder)
-    
-    # 示例：处理一批数据
+
+    # Example: Process a batch of data
     batch_size = 4
-    # 模拟输入数据（在实际使用中替换为真实数据）
+    # Simulate input data (replace with real data in actual use)
     original_batch = np.random.randn(batch_size, 512, 512).astype(np.float32)
     enhanced_batch = np.random.randn(batch_size, 512, 512).astype(np.float32)
-    
-    # 准备混合输入
+
+    # Prepare mixed input
     mixed_input = prepare_mixed_input(original_batch, enhanced_batch)
-    
-    # 提取多尺度特征
-    print("提取多尺度特征...")
+
+    # Extract multi-scale features
+    print("Extracting multi-scale features...")
     multi_scale_features = feature_processor.extract_features(mixed_input)
-    
-    # 分析特征
+
+    # Analyze features
     feature_processor.analyze_features(multi_scale_features)
-    
-    print("\n编码器迁移完成！现在你可以使用提取的多尺度特征进行后续操作。")
-    print("特征尺寸总结:")
-    print("- Level 1: 256x256 (高分辨率细节)")
-    print("- Level 2: 128x128 (中等分辨率特征)") 
-    print("- Level 3: 64x64 (语义特征)")
-    print("- Level 4: 32x32 (高级抽象特征)")
+
+    print("\nEncoder transfer completed! Now you can use the extracted multi-scale features for subsequent operations.")
+    print("Feature size summary:")
+    print("- Level 1: 256x256 (high-resolution details)")
+    print("- Level 2: 128x128 (medium-resolution features)")
+    print("- Level 3: 64x64 (semantic features)")
+    print("- Level 4: 32x32 (high-level abstract features)")
