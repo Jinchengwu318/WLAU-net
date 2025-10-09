@@ -1,4 +1,4 @@
-# Liver Tumor Segmentation with Improved TransUnet
+# WLAU-net
 
 This repository contains the implementation of our paper "Liver Tumor Segmentation in Non-Contrast CT using Improved TransUnet and Transfer Learning".
 
@@ -12,6 +12,6 @@ This repository contains the implementation of our paper "Liver Tumor Segmentati
 ## Installation
 
 ```bash
-git clone https://github.com/your_username/liver-tumor-segmentation.git
 cd liver-tumor-segmentation
 pip install -r requirements.txt
+```
